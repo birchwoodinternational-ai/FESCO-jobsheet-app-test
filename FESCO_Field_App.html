@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FESCO Field Log</title>
+<style>
+  :root {
+    --bg: #181614;
+    --surface: #221f1c;
+    --surface-2: #2b2723;
+    --border: #3a352f;
+    --text: #f5f0e8;
+    --text-dim: #a89e8f;
+    --accent: #f5a623;
+    --accent-dim: #8a5d12;
+    --on: #4caf6e;
+    --on-dim: #1f3d29;
+    --off: #6b6358;
+    --danger: #d9534f;
+    --radius: 14px;
+    --tap: 60px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: contain;
+  }
+  #app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  .screen { display: none; flex-direction: column; flex: 1; padding-bottom: 100px; }
+  .screen.active { display: flex; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar .eyebrow { font-size: 13px; color: var(--accent); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 4px; }
+  .topbar h1 { font-size: 22px; margin: 0; font-weight: 700; line-height: 1.25; }
+  .topbar .sub { font-size: 14px; color: var(--text-dim); margin-top: 4px; }
+
+  .content { padding: 16px 16px 0; flex: 1; }
+
+  .bigbtn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; min-height: var(--tap);
+    background: var(--accent); color: #1a1208;
+    font-size: 19px; font-weight: 700;
+    border: none; border-radius: var(--radius);
+    margin: 8px 0;
+    touch-action: manipulation;
+  }
+  .bigbtn:active { transform: scale(0.98); }
+  .bigbtn.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  .bigbtn.danger { background: var(--danger); color: #fff; }
+  .bigbtn:disabled { opacity: 0.4; }
+
+  .fixed-bottom {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    max-width: 480px; margin: 0 auto;
+    background: linear-gradient(to top, var(--bg) 60%, transparent);
+    padding: 24px 16px 18px;
+    z-index: 20;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; color: var(--text-dim); font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field select, .field input, .field textarea {
+    width: 100%; min-height: 52px;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    font-size: 17px; padding: 12px 14px;
+    font-family: inherit;
+  }
+  .field textarea { min-height: 80px; resize: vertical; }
+  .field select { appearance: none; -webkit-appearance: none; }
+
+  .roster-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    min-height: var(--tap);
+    touch-action: manipulation;
+  }
+  .roster-row .info { flex: 1; min-width: 0; }
+  .roster-row .name { font-size: 17px; font-weight: 600; }
+  .roster-row .meta { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+  .toggle {
+    flex-shrink: 0;
+    width: 64px; height: 38px;
+    border-radius: 20px;
+    background: var(--off);
+    position: relative;
+    transition: background 0.15s;
+  }
+  .toggle.on { background: var(--on); }
+  .toggle .knob {
+    position: absolute; top: 3px; left: 3px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--text);
+    transition: left 0.15s;
+  }
+  .toggle.on .knob { left: 29px; }
+  .roster-row.is-off { opacity: 0.55; }
+
+  .section-label {
+    font-size: 13px; font-weight: 700; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 20px 0 10px; padding-left: 2px;
+  }
+
+  .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .pill {
+    padding: 10px 16px; border-radius: 20px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    font-size: 15px; color: var(--text-dim);
+  }
+  .pill.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+  .add-row-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; min-height: 52px;
+    background: transparent; border: 2px dashed var(--border);
+    border-radius: var(--radius); color: var(--text-dim);
+    font-size: 16px; font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 10px;
+  }
+  .badge.chargeable { background: var(--on-dim); color: var(--on); }
+  .badge.noncharge { background: #3d2f12; color: var(--accent); }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+
+  .job-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px;
+    margin-bottom: 12px;
+  }
+  .job-card .wellpad { font-size: 19px; font-weight: 700; }
+  .job-card .details { font-size: 14px; color: var(--text-dim); margin-top: 4px; }
+  .job-card .lastentry { font-size: 13px; color: var(--accent); margin-top: 8px; font-weight: 600; }
+
+  .toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--on); color: #0d1f14; font-weight: 700;
+    padding: 14px 24px; border-radius: 30px; font-size: 15px;
+    z-index: 100; opacity: 0; transition: opacity 0.2s, top 0.2s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; top: 40px; }
+
+  .spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 3px solid rgba(0,0,0,0.2); border-top-color: #1a1208;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; align-items: flex-end; justify-content: center;
+    z-index: 50;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal-sheet {
+    background: var(--surface); width: 100%; max-width: 480px;
+    border-radius: 20px 20px 0 0; padding: 20px 16px 30px;
+    max-height: 80vh; overflow-y: auto;
+  }
+  .modal-sheet h2 { font-size: 19px; margin: 0 0 14px; }
+  .modal-search {
+    width: 100%; min-height: 50px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); font-size: 16px; padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .modal-list-item {
+    padding: 14px 12px; border-bottom: 1px solid var(--border);
+    font-size: 16px; min-height: 48px; display: flex; align-items: center;
+  }
+  .modal-list-item:active { background: var(--surface-2); }
+
+  .link-text { color: var(--accent); font-size: 14px; text-align: center; padding: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toast" class="toast"></div>
+
+  <!-- SCREEN: Backend setup (first run only) -->
+  <div class="screen active" id="screen-setup">
+    <div class="topbar">
+      <p class="eyebrow">One-time setup</p>
+      <h1>Connect to your sheet</h1>
+      <p class="sub">Paste the Web App URL from your Google Apps Script deployment.</p>
+    </div>
+    <div class="content">
+      <div class="field">
+        <label>Web App URL</label>
+        <input type="text" id="setup-url" placeholder="https://script.google.com/macros/s/...">
+      </div>
+      <button class="bigbtn" id="setup-connect"><span>Connect</span></button>
+      <p class="link-text" id="setup-error" style="color: var(--danger); display:none;"></p>
+    </div>
+  </div>
+
+  <!-- SCREEN: Job list -->
+  <div class="screen" id="screen-jobs">
+    <div class="topbar">
+      <p class="eyebrow">FESCO field log</p>
+      <h1>Active jobs</h1>
+    </div>
+    <div class="content" id="jobs-list"></div>
+    <div class="fixed-bottom">
+      <button class="bigbtn" id="btn-new-job"><span>+ Start new job</span></button>
+    </div>
+  </div>
+
+  <!-- SCREEN: New job setup -->
+  <div class="screen" id="screen-newjob">
+    <div class="topbar">
+      <p class="eyebrow">Day 1 setup</p>
+      <h1>New job</h1>
+      <p class="sub">This only takes a minute — every day after this is much faster.</p>
+    </div>
+    <div class="content">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="nj-date">
+      </div>
+      <div class="field">
+        <label>Company</label>
+        <select id="nj-company"></select>
+      </div>
+      <div class="field">
+        <label>Wellpad</label>
+        <select id="nj-wellpad"></select>
+      </div>
+      <div class="field">
+        <label>FESCO job code</label>
+        <select id="nj-jobcode"></select>
+      </div>
+      <div class="field">
+        <label>Operation type</label>
+        <select id="nj-optype"></select>
+      </div>
+      <div class="field">
+        <label>Scope of operation</label>
+        <textarea id="nj-scope" placeholder="Brief description of the work"></textarea>
+      </div>
+
+      <div class="section-label">Personnel on location</div>
+      <div id="nj-personnel-list"></div>
+      <button class="add-row-btn" id="nj-add-person">+ Add person</button>
+
+      <div class="section-label">Equipment &amp; trucking on location</div>
+      <div id="nj-equipment-list"></div>
+      <button class="add-row-btn" id="nj-add-equipment">+ Add equipment / truck</button>
+    </div>
+    <div class="fixed-bottom">
+      <button class="bigbtn secondary" id="nj-cancel" style="margin-bottom:8px;"><span>Cancel</span></button>
+      <button class="bigbtn" id="nj-create"><span>Create job</span></button>
+    </div>
+  </div>
+
+  <!-- SCREEN: Daily entry (the 1-minute screen) -->
+  <div class="screen" id="screen-daily">
+    <div class="topbar">
+      <p class="eyebrow" id="daily-date"></p>
+      <h1 id="daily-wellpad"></h1>
+      <p class="sub" id="daily-company"></p>
+    </div>
+    <div class="content">
+      <div class="section-label">Personnel on location — tap to toggle</div>
+      <div id="daily-personnel-list"></div>
+      <button class="add-row-btn" id="daily-add-person">+ Add person</button>
+
+      <div class="section-label">Equipment &amp; trucking — tap to toggle</div>
+      <div id="daily-equipment-list"></div>
+      <button class="add-row-btn" id="daily-add-equipment">+ Add equipment / truck</button>
+
+      <div class="section-label">Notes (optional)</div>
+      <div class="field" style="margin-bottom: 8px;">
+        <textarea id="daily-notes" placeholder="Anything else to log today"></textarea>
+      </div>
+
+      <button class="bigbtn secondary" id="daily-complete-job" style="margin-top: 20px;"><span>Mark job complete</span></button>
+      <button class="bigbtn secondary" id="daily-back" style="background:transparent; border-color: transparent; color: var(--text-dim);"><span>← All jobs</span></button>
+    </div>
+    <div class="fixed-bottom">
+      <button class="bigbtn" id="daily-submit"><span>Submit today's log</span></button>
+    </div>
+  </div>
+
+  <!-- MODAL: Add person -->
+  <div class="modal-overlay" id="modal-person">
+    <div class="modal-sheet">
+      <h2>Add person</h2>
+      <input type="text" class="modal-search" id="modal-person-search" placeholder="Search roster or type a new name">
+      <div id="modal-person-list"></div>
+      <button class="bigbtn" id="modal-person-add-typed" style="margin-top:10px;"><span>Add as new</span></button>
+      <button class="bigbtn secondary" id="modal-person-close"><span>Close</span></button>
+    </div>
+  </div>
+
+  <!-- MODAL: Add equipment -->
+  <div class="modal-overlay" id="modal-equipment">
+    <div class="modal-sheet">
+      <h2>Add equipment / truck</h2>
+      <div class="pill-row" id="modal-equipment-categories"></div>
+      <input type="text" class="modal-search" id="modal-equipment-search" placeholder="Search or type a new item">
+      <div id="modal-equipment-list"></div>
+      <button class="bigbtn" id="modal-equipment-add-typed" style="margin-top:10px;"><span>Add as new</span></button>
+      <button class="bigbtn secondary" id="modal-equipment-close"><span>Close</span></button>
+    </div>
+  </div>
+</div>
+
+<script>
+const LS_KEY = 'fesco_field_app_url';
+let API_URL = localStorage.getItem(LS_KEY) || '';
+let BOOTSTRAP = { jobs: [], lists: {} };
+let CURRENT_JOB = null;
+let DAILY_PERSONNEL = [];
+let DAILY_EQUIPMENT = [];
+let MODAL_EQUIPMENT_CATEGORY = 'FESCO Equipment';
+const EQUIPMENT_CATEGORIES = ['FESCO Equipment', '3rd Party Rental', 'FESCO Pickup', 'In-House Semi', '3rd Party Semi'];
+
+function $(id) { return document.getElementById(id); }
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function fmtDateLong(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+async function apiGet(action, params) {
+  params = params || {};
+  const q = Object.entries(Object.assign({action}, params)).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  const res = await fetch(`${API_URL}?${q}`);
+  return res.json();
+}
+async function apiPost(body) {
+  const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body), headers: {'Content-Type': 'text/plain;charset=utf-8'} });
+  return res.json();
+}
+
+// ---------- Setup screen ----------
+$('setup-connect').addEventListener('click', async () => {
+  const url = $('setup-url').value.trim();
+  if (!url) return;
+  $('setup-error').style.display = 'none';
+  try {
+    API_URL = url;
+    const data = await apiGet('bootstrap');
+    if (data.error) throw new Error(data.error);
+    BOOTSTRAP = data;
+    localStorage.setItem(LS_KEY, url);
+    renderJobsList();
+    showScreen('screen-jobs');
+  } catch (err) {
+    $('setup-error').textContent = "Couldn't connect — check the URL and try again.";
+    $('setup-error').style.display = 'block';
+  }
+});
+
+async function boot() {
+  if (!API_URL) { showScreen('screen-setup'); return; }
+  try {
+    BOOTSTRAP = await apiGet('bootstrap');
+    if (BOOTSTRAP.error) { showScreen('screen-setup'); return; }
+    renderJobsList();
+    showScreen('screen-jobs');
+  } catch (err) {
+    showScreen('screen-setup');
+  }
+}
+
+// ---------- Job list screen ----------
+function renderJobsList() {
+  const el = $('jobs-list');
+  const jobs = BOOTSTRAP.jobs || [];
+  if (jobs.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">&#9679;</div><p>No active jobs yet.<br>Tap below to start one.</p></div>`;
+    return;
+  }
+  el.innerHTML = jobs.map(j => `
+    <div class="job-card" data-jobid="${j['Job ID']}">
+      <div class="wellpad">${escapeHtml(j['Wellpad'] || '')}</div>
+      <div class="details">${escapeHtml(j['Company'] || '')} · ${escapeHtml(j['FESCO Job Code'] || '')} · ${escapeHtml(j['Operation Type'] || '')}</div>
+      <div class="lastentry">Tap to open today's log →</div>
+    </div>
+  `).join('');
+  el.querySelectorAll('.job-card').forEach(card => {
+    card.addEventListener('click', () => openJob(card.dataset.jobid));
+  });
+}
+
+$('btn-new-job').addEventListener('click', () => {
+  $('nj-date').value = todayISO();
+  populateSelect('nj-company', BOOTSTRAP.lists['Company']);
+  populateSelect('nj-wellpad', BOOTSTRAP.lists['Wellpad']);
+  populateSelect('nj-jobcode', BOOTSTRAP.lists['FESCO Job Code']);
+  populateSelect('nj-optype', BOOTSTRAP.lists['Operation Type']);
+  DAILY_PERSONNEL = [];
+  DAILY_EQUIPMENT = [];
+  renderRosterList('nj-personnel-list', DAILY_PERSONNEL, 'person');
+  renderRosterList('nj-equipment-list', DAILY_EQUIPMENT, 'equipment');
+  showScreen('screen-newjob');
+});
+$('nj-cancel').addEventListener('click', () => showScreen('screen-jobs'));
+
+function populateSelect(id, options) {
+  const sel = $(id);
+  sel.innerHTML = '<option value="">Select…</option>' + (options || []).map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- Roster rendering (shared by New Job + Daily Entry) ----------
+function renderRosterList(containerId, arr, kind) {
+  const el = $(containerId);
+  if (arr.length === 0) {
+    el.innerHTML = `<p style="color: var(--text-dim); font-size: 14px; padding: 4px 0 8px;">None yet — add ${kind === 'person' ? 'people' : 'equipment'} below.</p>`;
+    return;
+  }
+  el.innerHTML = arr.map((item, i) => {
+    if (kind === 'person') {
+      const chip = item.chargeable === 'Non-Chargeable'
+        ? `<span class="badge noncharge">Non-charge</span>`
+        : `<span class="badge chargeable">Chargeable</span>`;
+      return `
+        <div class="roster-row ${item.onSite ? '' : 'is-off'}" data-idx="${i}" data-kind="person">
+          <div class="info">
+            <div class="name">${escapeHtml(item.name)}</div>
+            <div class="meta">${escapeHtml(item.role || '')} ${chip}</div>
+          </div>
+          <div class="toggle ${item.onSite ? 'on' : ''}"><div class="knob"></div></div>
+        </div>`;
+    } else {
+      return `
+        <div class="roster-row ${item.onSite ? '' : 'is-off'}" data-idx="${i}" data-kind="equipment">
+          <div class="info">
+            <div class="name">${escapeHtml(item.item)}</div>
+            <div class="meta">${escapeHtml(item.category)}${item.unit ? ' · ' + escapeHtml(item.unit) : ''}${item.qty > 1 ? ' · qty ' + item.qty : ''}</div>
+          </div>
+          <div class="toggle ${item.onSite ? 'on' : ''}"><div class="knob"></div></div>
+        </div>`;
+    }
+  }).join('');
+  el.querySelectorAll('.roster-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const idx = parseInt(row.dataset.idx, 10);
+      arr[idx].onSite = !arr[idx].onSite;
+      renderRosterList(containerId, arr, kind);
+    });
+  });
+}
+
+// ---------- Add person modal ----------
+let MODAL_PERSON_TARGET = null; // 'nj' or 'daily'
+function openPersonModal(target) {
+  MODAL_PERSON_TARGET = target;
+  $('modal-person-search').value = '';
+  renderPersonModalList('');
+  $('modal-person').classList.add('active');
+  setTimeout(() => $('modal-person-search').focus(), 50);
+}
+function renderPersonModalList(query) {
+  const roster = BOOTSTRAP.lists['Employee Roster'] || [];
+  const arr = MODAL_PERSON_TARGET === 'nj' ? DAILY_PERSONNEL : DAILY_PERSONNEL;
+  const existingNames = arr.map(p => p.name.toLowerCase());
+  const filtered = roster.filter(name =>
+    name.toLowerCase().includes(query.toLowerCase()) && !existingNames.includes(name.toLowerCase())
+  );
+  const el = $('modal-person-list');
+  if (filtered.length === 0) {
+    el.innerHTML = `<p style="color: var(--text-dim); font-size: 14px; padding: 10px 0;">No matches. Type a new name and tap "Add as new" below.</p>`;
+    return;
+  }
+  el.innerHTML = filtered.map(name => `<div class="modal-list-item" data-name="${escapeHtml(name)}">${escapeHtml(name)}</div>`).join('');
+  el.querySelectorAll('.modal-list-item').forEach(item => {
+    item.addEventListener('click', () => {
+      addPerson(item.dataset.name);
+      $('modal-person').classList.remove('active');
+    });
+  });
+}
+$('modal-person-search').addEventListener('input', (e) => renderPersonModalList(e.target.value));
+$('modal-person-add-typed').addEventListener('click', () => {
+  const name = $('modal-person-search').value.trim();
+  if (!name) return;
+  addPerson(name);
+  $('modal-person').classList.remove('active');
+});
+$('modal-person-close').addEventListener('click', () => $('modal-person').classList.remove('active'));
+
+function addPerson(name) {
+  DAILY_PERSONNEL.push({ name, onSite: true, role: '', chargeable: 'Chargeable', reason: '' });
+  const containerId = MODAL_PERSON_TARGET === 'nj' ? 'nj-personnel-list' : 'daily-personnel-list';
+  renderRosterList(containerId, DAILY_PERSONNEL, 'person');
+}
+
+$('nj-add-person').addEventListener('click', () => openPersonModal('nj'));
+$('daily-add-person').addEventListener('click', () => openPersonModal('daily'));
+
+// ---------- Add equipment modal ----------
+let MODAL_EQUIPMENT_TARGET = null;
+function openEquipmentModal(target) {
+  MODAL_EQUIPMENT_TARGET = target;
+  $('modal-equipment-search').value = '';
+  renderEquipmentCategoryPills();
+  renderEquipmentModalList('');
+  $('modal-equipment').classList.add('active');
+}
+function renderEquipmentCategoryPills() {
+  $('modal-equipment-categories').innerHTML = EQUIPMENT_CATEGORIES.map(cat =>
+    `<div class="pill ${cat === MODAL_EQUIPMENT_CATEGORY ? 'active' : ''}" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</div>`
+  ).join('');
+  document.querySelectorAll('#modal-equipment-categories .pill').forEach(p => {
+    p.addEventListener('click', () => {
+      MODAL_EQUIPMENT_CATEGORY = p.dataset.cat;
+      renderEquipmentCategoryPills();
+      renderEquipmentModalList($('modal-equipment-search').value);
+    });
+  });
+}
+function equipmentMasterForCategory(cat) {
+  const lists = BOOTSTRAP.lists;
+  if (cat === 'FESCO Equipment') return (lists['FESCO Equipment'] || []).map(i => ({item: i, unit: ''}));
+  if (cat === '3rd Party Rental') return (lists['3rd Party Rental'] || []).map(i => ({item: i, unit: ''}));
+  if (cat === 'FESCO Pickup') return (lists['FESCO Pickup'] || []).map(i => ({item: i, unit: ''}));
+  if (cat === 'In-House Semi') return (lists['In-House Semi'] || []).map(i => ({item: i, unit: i}));
+  if (cat === '3rd Party Semi') return (lists['3rd Party Semi'] || []).map(i => ({item: i, unit: i}));
+  return [];
+}
+function renderEquipmentModalList(query) {
+  const arr = DAILY_EQUIPMENT;
+  const existing = arr.filter(e => e.category === MODAL_EQUIPMENT_CATEGORY).map(e => e.item.toLowerCase());
+  const master = equipmentMasterForCategory(MODAL_EQUIPMENT_CATEGORY);
+  const filtered = master.filter(m => m.item.toLowerCase().includes(query.toLowerCase()) && !existing.includes(m.item.toLowerCase()));
+  const el = $('modal-equipment-list');
+  if (filtered.length === 0) {
+    el.innerHTML = `<p style="color: var(--text-dim); font-size: 14px; padding: 10px 0;">No matches in this category. Type a new item and tap "Add as new".</p>`;
+    return;
+  }
+  el.innerHTML = filtered.map(m => `<div class="modal-list-item" data-item="${escapeHtml(m.item)}" data-unit="${escapeHtml(m.unit)}">${escapeHtml(m.item)}</div>`).join('');
+  el.querySelectorAll('.modal-list-item').forEach(item => {
+    item.addEventListener('click', () => {
+      addEquipment(item.dataset.item, item.dataset.unit);
+      $('modal-equipment').classList.remove('active');
+    });
+  });
+}
+$('modal-equipment-search').addEventListener('input', (e) => renderEquipmentModalList(e.target.value));
+$('modal-equipment-add-typed').addEventListener('click', () => {
+  const name = $('modal-equipment-search').value.trim();
+  if (!name) return;
+  addEquipment(name, '');
+  $('modal-equipment').classList.remove('active');
+});
+$('modal-equipment-close').addEventListener('click', () => $('modal-equipment').classList.remove('active'));
+
+function addEquipment(item, unit) {
+  DAILY_EQUIPMENT.push({ category: MODAL_EQUIPMENT_CATEGORY, item, unit: unit || '', qty: 1, onSite: true });
+  const containerId = MODAL_EQUIPMENT_TARGET === 'nj' ? 'nj-equipment-list' : 'daily-equipment-list';
+  renderRosterList(containerId, DAILY_EQUIPMENT, 'equipment');
+}
+
+$('nj-add-equipment').addEventListener('click', () => openEquipmentModal('nj'));
+$('daily-add-equipment').addEventListener('click', () => openEquipmentModal('daily'));
+
+// ---------- Create new job ----------
+$('nj-create').addEventListener('click', async () => {
+  const company = $('nj-company').value, wellpad = $('nj-wellpad').value;
+  if (!company || !wellpad) { toast('Pick a company and wellpad first'); return; }
+  const btn = $('nj-create');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const result = await apiPost({
+      action: 'createJob',
+      date: $('nj-date').value,
+      company, wellpad,
+      jobCode: $('nj-jobcode').value,
+      opType: $('nj-optype').value,
+      scopeComments: $('nj-scope').value,
+      personnel: DAILY_PERSONNEL,
+      equipment: DAILY_EQUIPMENT
+    });
+    if (result.error) throw new Error(result.error);
+    BOOTSTRAP = await apiGet('bootstrap');
+    toast('Job created');
+    openJob(result.jobId);
+  } catch (err) {
+    toast("Couldn't save — check connection");
+  } finally {
+    btn.disabled = false; btn.innerHTML = '<span>Create job</span>';
+  }
+});
+
+// ---------- Open job -> Daily entry screen ----------
+async function openJob(jobId) {
+  showScreen('screen-daily');
+  $('daily-wellpad').textContent = 'Loading…';
+  $('daily-personnel-list').innerHTML = '';
+  $('daily-equipment-list').innerHTML = '';
+  const data = await apiGet('latestForJob', { jobId });
+  CURRENT_JOB = data.job;
+  $('daily-date').textContent = fmtDateLong(todayISO());
+  $('daily-wellpad').textContent = CURRENT_JOB ? CURRENT_JOB['Wellpad'] : '';
+  $('daily-company').textContent = CURRENT_JOB ? `${CURRENT_JOB['Company']} · ${CURRENT_JOB['FESCO Job Code']}` : '';
+  DAILY_PERSONNEL = (data.personnel || []).map(p => ({
+    name: p['Employee Name'], onSite: p['On Location?'] === 'Yes',
+    role: p['Role / Comments'] || '', chargeable: p['Chargeable?'] || 'Chargeable', reason: p['Non-Chargeable Reason'] || ''
+  }));
+  DAILY_EQUIPMENT = (data.equipment || []).map(e => ({
+    category: e['Category'], item: e['Item'], unit: e['Unit / Asset ID'] || '',
+    qty: e['Qty'] || 1, onSite: e['On Location?'] === 'Yes'
+  }));
+  renderRosterList('daily-personnel-list', DAILY_PERSONNEL, 'person');
+  renderRosterList('daily-equipment-list', DAILY_EQUIPMENT, 'equipment');
+  $('daily-notes').value = '';
+  CURRENT_JOB.jobId = jobId;
+}
+
+$('daily-back').addEventListener('click', () => showScreen('screen-jobs'));
+
+$('daily-submit').addEventListener('click', async () => {
+  const btn = $('daily-submit');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const result = await apiPost({
+      action: 'submitDay',
+      jobId: CURRENT_JOB.jobId,
+      date: todayISO(),
+      personnel: DAILY_PERSONNEL,
+      equipment: DAILY_EQUIPMENT,
+      scopeComments: $('daily-notes').value || undefined
+    });
+    if (result.error) throw new Error(result.error);
+    toast("Today's log submitted");
+    setTimeout(() => showScreen('screen-jobs'), 900);
+  } catch (err) {
+    toast("Couldn't submit — check connection");
+  } finally {
+    btn.disabled = false; btn.innerHTML = "<span>Submit today's log</span>";
+  }
+});
+
+$('daily-complete-job').addEventListener('click', async () => {
+  if (!confirm('Mark this job complete? It will move out of your active job list.')) return;
+  try {
+    await apiPost({ action: 'completeJob', jobId: CURRENT_JOB.jobId });
+    BOOTSTRAP = await apiGet('bootstrap');
+    toast('Job marked complete');
+    renderJobsList();
+    showScreen('screen-jobs');
+  } catch (err) {
+    toast("Couldn't update — check connection");
+  }
+});
+
+boot();
+</script>
+</body>
+</html>
